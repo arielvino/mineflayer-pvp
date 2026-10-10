@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "tsc && require-self",
     "clean": "rm -rf lib",
-    "test": "test"
+    "test": "tsc && node --test 'test/*.test.js'"
   },
   "repository": {
     "type": "git",
