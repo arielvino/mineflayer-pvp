@@ -95,6 +95,8 @@ export class PVP
     {
         if (this.target == null) return
 
+        // A new attack may start before path_stop arrives, so name the target that stopped.
+        const target = this.target;
         this.target = undefined;
 
         const pathfinder: Pathfinder = this.bot.pathfinder;
@@ -103,12 +105,12 @@ export class PVP
         try {
             await this.onceWithTimeout('path_stop', 5000)
         } catch (err) {
-            this.bot.removeAllListeners('path_stop')
+            // onceWithTimeout already removed its own listener; other plugins' stay.
             pathfinder.setGoal(null)
         }
 
         // @ts-expect-error
-        this.bot.emit('stoppedAttacking');
+        this.bot.emit('stoppedAttacking', target);
     }
 
     /**
@@ -146,13 +148,14 @@ export class PVP
     {
         if (this.target == null) return
 
+        const target = this.target;
         this.target = undefined;
 
         const pathfinder: Pathfinder = this.bot.pathfinder;
         pathfinder.setGoal(null);
 
         // @ts-expect-error
-        this.bot.emit('stoppedAttacking');
+        this.bot.emit('stoppedAttacking', target);
     }
 
     /**
