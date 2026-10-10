@@ -51,6 +51,11 @@ export class PVP
     meleeAttackRate: TimingSolver = new MaxDamageOffset();
 
     /**
+     * Whether the shield is up because this plugin raised it (after a swing, or against a creeper).
+     */
+    private raisedShield: boolean = false;
+
+    /**
      * Creates a new instance of the PVP plugin.
      *
      * @param bot - The bot this plugin is being attached to.
@@ -98,6 +103,7 @@ export class PVP
         // A new attack may start before path_stop arrives, so name the target that stopped.
         const target = this.target;
         this.target = undefined;
+        this.lowerShield();
 
         const pathfinder: Pathfinder = this.bot.pathfinder;
         pathfinder.stop();
@@ -150,6 +156,7 @@ export class PVP
 
         const target = this.target;
         this.target = undefined;
+        this.lowerShield();
 
         const pathfinder: Pathfinder = this.bot.pathfinder;
         pathfinder.setGoal(null);
@@ -215,6 +222,7 @@ export class PVP
             this.bot.pathfinder.stop();
             this.bot.lookAt(this.target.position.offset(0, 1, 0), true);
             this.bot.activateItem(true);
+            this.raisedShield = true;
 
             setTimeout(() => {
                 this.blockingExplosion = false;
@@ -241,7 +249,10 @@ export class PVP
 
         if (shield)
         {
-            queue.addSync(() => this.bot.deactivateItem())
+            queue.addSync(() => {
+                this.bot.deactivateItem()
+                this.raisedShield = false
+            })
             queue.add(cb => setTimeout(cb, 100))
         }
 
@@ -263,8 +274,10 @@ export class PVP
             queue.add(cb => setTimeout(cb, 150))
             queue.addSync(() => {
                 if (target !== this.target) throw 'Target changed!';
-                if (this.hasShield())
+                if (this.hasShield()) {
                     this.bot.activateItem(true)
+                    this.raisedShield = true
+                }
             })
         }
 
@@ -272,6 +285,16 @@ export class PVP
             if (!err)
                 this.timeToNextAttack = this.meleeAttackRate.getTicks(this.bot);
         });
+    }
+
+    /**
+     * Lowers the shield if this plugin raised it, so the bot doesn't walk on blocking after a fight.
+     */
+    private lowerShield(): void
+    {
+        if (!this.raisedShield) return;
+        this.raisedShield = false;
+        if (this.hasShield()) this.bot.deactivateItem();
     }
 
     /**
