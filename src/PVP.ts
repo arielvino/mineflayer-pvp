@@ -12,6 +12,7 @@ export class PVP
     private readonly bot: Bot;
     private timeToNextAttack: number = 0;
     private wasInRange: boolean = false;
+    private refollowTicks: number = 0;
     private blockingExplosion: boolean = false;
 
     /**
@@ -192,6 +193,16 @@ export class PVP
             this.timeToNextAttack = 0;
 
         this.wasInRange = inRange;
+
+        // GoalFollow keeps the target's block until the target moves more than followRange
+        // from it, and counts as reached within followRange of that block: together that
+        // can stop the bot ~4 blocks away, past attackRange. Out of reach with the
+        // pathfinder idle, aim the goal at where the target is now (at most every 10 ticks).
+        if (!inRange && !this.bot.pathfinder.isMoving() && --this.refollowTicks <= 0)
+        {
+            this.refollowTicks = 10;
+            this.bot.pathfinder.setGoal(new goals.GoalFollow(this.target, this.followRange), true);
+        }
     }
 
     /**
