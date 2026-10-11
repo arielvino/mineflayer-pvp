@@ -4,6 +4,11 @@ import { Entity } from "prismarine-entity";
 import { MaxDamageOffset, TimingSolver } from "./TimingSolver";
 import { TaskQueue } from 'mineflayer-utils';
 
+// Critical hits: jump this many ticks before a swing is due, and wait at most this
+// many ticks past it for the fall.
+const CRIT_JUMP_LEAD = 6;
+const CRIT_MAX_HOLD = 8;
+
 /**
  * The main pvp manager plugin class.
  */
@@ -14,6 +19,8 @@ export class PVP
     private wasInRange: boolean = false;
     private refollowTicks: number = 0;
     private blockingExplosion: boolean = false;
+    private critJumpTicks: number = -1;
+    private critHoldTicks: number = 0;
 
     /**
      * The current target. This value should never be assigned to from outside the plugin.
@@ -50,6 +57,12 @@ export class PVP
      * // TODO Check for 'hasAtttackCooldown' feature. If feature not present, default to RandomTicks solver.
      */
     meleeAttackRate: TimingSolver = new MaxDamageOffset();
+
+    /**
+     * Whether to time swings as critical hits (x1.5 damage): jump CRIT_JUMP_LEAD ticks
+     * before a swing is due and land it on the way down, not sprinting.
+     */
+    criticalHits: boolean = true;
 
     /**
      * Whether the shield is up because this plugin raised it (after a swing, or against a creeper).
@@ -174,8 +187,15 @@ export class PVP
         this.checkExplosion();
         this.checkRange();
 
+        // Stopped mid crit jump: don't leave the jump key down.
+        if (!this.target && this.critJumpTicks >= 0)
+        {
+            this.bot.setControlState('jump', false);
+            this.critJumpTicks = -1;
+        }
         if (!this.target || this.blockingExplosion) return;
 
+        this.critTick();
         this.timeToNextAttack--;
         if (this.timeToNextAttack === -1)
             this.attemptAttack();
@@ -199,8 +219,16 @@ export class PVP
 
         const inRange = dist <= this.attackRange;
 
+        // Coming into reach: swing now, or jump now and swing on the way down.
         if (!this.wasInRange && inRange)
+        {
             this.timeToNextAttack = 0;
+            if (this.canCritJump())
+            {
+                this.startCritJump();
+                this.timeToNextAttack = CRIT_JUMP_LEAD;
+            }
+        }
 
         this.wasInRange = inRange;
 
@@ -213,6 +241,50 @@ export class PVP
             this.refollowTicks = 10;
             this.bot.pathfinder.setGoal(new goals.GoalFollow(this.target, this.followRange), true);
         }
+    }
+
+    private canCritJump(): boolean
+    {
+        const e = this.bot.entity as any;
+        return this.criticalHits && this.critJumpTicks < 0 && e.onGround && !e.isInWater && !e.isInLava;
+    }
+
+    private startCritJump(): void
+    {
+        this.bot.setControlState('jump', true);
+        this.critJumpTicks = 0;
+    }
+
+    /**
+     * Critical hits: a swing lands as a crit while falling, not on the ground and not
+     * sprinting. Jump CRIT_JUMP_LEAD ticks before the swing is due (a jump's apex is ~6
+     * ticks up), stop sprinting once airborne, and hold a swing that's due while not
+     * yet falling for a tick: on the first falling tick the server hasn't counted any
+     * fall yet, and the hit lands plain.
+     */
+    private critTick(): void
+    {
+        const e = this.bot.entity;
+        if (this.critJumpTicks >= 0)
+        {
+            this.critJumpTicks++;
+            if (this.critJumpTicks > 1)
+            {
+                this.bot.setControlState('jump', false);
+                this.bot.setControlState('sprint', false);
+                if (e.onGround) this.critJumpTicks = -1;
+            }
+        }
+        else if (this.wasInRange && this.timeToNextAttack === CRIT_JUMP_LEAD && this.canCritJump())
+            this.startCritJump();
+
+        if (this.timeToNextAttack !== 0) return;
+        if (this.criticalHits && !e.onGround && e.velocity.y > -0.1 && this.critHoldTicks < CRIT_MAX_HOLD)
+        {
+            this.timeToNextAttack = 1;
+            this.critHoldTicks++;
+        }
+        else this.critHoldTicks = 0;
     }
 
     /**
