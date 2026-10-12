@@ -49,6 +49,14 @@ export class PVP
     keepDistance?: [number, number];
 
     /**
+     * Sprint-hit every swing for the extra knockback: a fresh start-sprint just before
+     * it. A melee mob knocked 2-3 blocks back has to walk in again and meets the next
+     * swing at the edge of our reach, before it's close enough to hit. A sprinting hit
+     * can't crit, so this turns criticalHits off.
+     */
+    knockbackHits: boolean = false;
+
+    /**
      * How far away the target entity must be to lose the target. Target entities further than this
      * distance from the bot will be considered defeated.
      */
@@ -256,7 +264,7 @@ export class PVP
     private canCritJump(): boolean
     {
         const e = this.bot.entity as any;
-        return this.criticalHits && this.critJumpTicks < 0 && e.onGround && !e.isInWater && !e.isInLava;
+        return this.criticalHits && !this.knockbackHits && this.critJumpTicks < 0 && e.onGround && !e.isInWater && !e.isInLava;
     }
 
     private startCritJump(): void
@@ -333,7 +341,7 @@ export class PVP
             this.startCritJump();
 
         if (this.timeToNextAttack !== 0) return;
-        if (this.criticalHits && !e.onGround && e.velocity.y > -0.1 && this.critHoldTicks < CRIT_MAX_HOLD)
+        if (this.criticalHits && !this.knockbackHits && !e.onGround && e.velocity.y > -0.1 && this.critHoldTicks < CRIT_MAX_HOLD)
         {
             this.timeToNextAttack = 1;
             this.critHoldTicks++;
@@ -400,6 +408,12 @@ export class PVP
 
         queue.addSync(() => {
             if (target !== this.target) throw 'Target changed!';
+            if (this.knockbackHits)
+            {
+                // Off and on again: a control already on sends no new start-sprint.
+                this.bot.setControlState('sprint', false);
+                this.bot.setControlState('sprint', true);
+            }
             this.bot.attack(this.target);
 
             // @ts-expect-error
