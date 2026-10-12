@@ -40,6 +40,15 @@ export class PVP
     followRange: number = 2;
 
     /**
+     * Spacing for melee: keep the target between near and far blocks away (centre to
+     * centre). Closer than near while the next swing isn't ready, back off; the follow
+     * goal closes in no nearer than the band's middle. A player reaches ~3 blocks, a
+     * zombie-like mob only ~1.4, so a band like [2.2, 2.9] hits without being hit.
+     * Undefined: off.
+     */
+    keepDistance?: [number, number];
+
+    /**
      * How far away the target entity must be to lose the target. Target entities further than this
      * distance from the bot will be considered defeated.
      */
@@ -101,7 +110,7 @@ export class PVP
         const pathfinder: Pathfinder = this.bot.pathfinder;
         if (this.movements) pathfinder.setMovements(this.movements);
 
-        pathfinder.setGoal(new goals.GoalFollow(this.target, this.followRange), true);
+        pathfinder.setGoal(this.followGoal(this.target), true);
 
         // @ts-expect-error
         this.bot.emit('startedAttacking');
@@ -196,6 +205,7 @@ export class PVP
         if (!this.target || this.blockingExplosion) return;
 
         this.critTick();
+        this.spacingTick();
         this.timeToNextAttack--;
         if (this.timeToNextAttack === -1)
             this.attemptAttack();
@@ -239,7 +249,7 @@ export class PVP
         if (!inRange && !this.bot.pathfinder.isMoving() && --this.refollowTicks <= 0)
         {
             this.refollowTicks = 10;
-            this.bot.pathfinder.setGoal(new goals.GoalFollow(this.target, this.followRange), true);
+            this.bot.pathfinder.setGoal(this.followGoal(this.target), true);
         }
     }
 
@@ -262,6 +272,50 @@ export class PVP
      * yet falling for a tick: on the first falling tick the server hasn't counted any
      * fall yet, and the hit lands plain.
      */
+    private spacing: boolean = false;
+
+    /** How close the follow goal brings the bot: the middle of keepDistance when set. */
+    private followGoal(target: Entity): goals.GoalFollow
+    {
+        const range = this.keepDistance ? (this.keepDistance[0] + this.keepDistance[1]) / 2 : this.followRange;
+        return new goals.GoalFollow(target, range);
+    }
+
+    /**
+     * Back off while the target is inside keepDistance's near edge and the next swing
+     * isn't due, with the pathfinder's goal paused so it doesn't walk us back in.
+     */
+    private spacingTick(): void
+    {
+        const target = this.target;
+        if (!this.keepDistance || !target)
+        {
+            if (this.spacing) this.endSpacing();
+            return;
+        }
+        const d = target.position.distanceTo(this.bot.entity.position);
+        if (d < this.keepDistance[0] && this.timeToNextAttack > 1)
+        {
+            if (!this.spacing)
+            {
+                this.spacing = true;
+                this.bot.pathfinder.setGoal(null);
+            }
+            this.bot.lookAt(target.position.offset(0, target.height * 0.85, 0), true);
+            this.bot.setControlState('forward', false);
+            this.bot.setControlState('sprint', false);
+            this.bot.setControlState('back', true);
+        }
+        else if (this.spacing) this.endSpacing();
+    }
+
+    private endSpacing(): void
+    {
+        this.spacing = false;
+        this.bot.setControlState('back', false);
+        if (this.target) this.bot.pathfinder.setGoal(this.followGoal(this.target), true);
+    }
+
     private critTick(): void
     {
         const e = this.bot.entity;
