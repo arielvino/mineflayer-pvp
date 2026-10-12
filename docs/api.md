@@ -48,9 +48,9 @@ Welcome to the *mineflayer-pvp* API documentation page.
 
   Called when the bot has started attacking a new target.
 
-* `bot.on('stoppedAttacking', (target) => {})`
+* `bot.on('stoppedAttacking', () => {})`
 
-  Called when the bot has stopped attacking a target. (Either manualluy stopped, or target has died/teleported/despawned/disconnected.) `target` is the entity that was being attacked. `stop()` emits this only after pathfinder has stopped, so a new attack may already have started; compare `target` to tell which attack ended.
+  Called when the bot has stopped attacking a target. (Either manualluy stopped, or target has died/teleported/despawned/disconnected.)
 
 * `bot.on('attackedTarget', () => {})`
 
