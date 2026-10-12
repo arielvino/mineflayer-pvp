@@ -26,7 +26,8 @@ Welcome to the *mineflayer-pvp* API documentation page.
 
 * `bot.pvp.movements`
 
-  The pathfinder movements config to use when pursuing a target.
+  The pathfinder movements config to use when pursuing a target. Unset (the default), the
+  chase uses the movements the bot already gave pathfinder.
 
 * `bot.pvp.followRange`
 

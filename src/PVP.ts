@@ -28,9 +28,9 @@ export class PVP
     target?: Entity;
 
     /**
-     * The movements object to pass to pathfinder when creating the follow entity goal. Assign
-     * to null in order to avoid passing any movement config to pathfinder. (If you plan on using
-     * your own)
+     * The movements object to pass to pathfinder when creating the follow entity goal. Unset,
+     * the chase uses whatever movements the bot gave pathfinder (pathfinder's defaults dig and
+     * scaffold, so a chase through them tunnels out of any enclosure).
      */
     movements?: Movements;
 
@@ -94,7 +94,6 @@ export class PVP
     constructor(bot: Bot)
     {
         this.bot = bot;
-        this.movements = new Movements(bot);
 
         this.bot.on('physicsTick', () => this.update());
         this.bot.on('entityGone', e => { if (e === this.target) this.stop(); })
